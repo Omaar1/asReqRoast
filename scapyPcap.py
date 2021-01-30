@@ -107,24 +107,39 @@ encTypes={
         '65':   "subkey-keymaterial",
 }
 
-def printer(proto,srcIP,dstIP,src_ip_port, dst_ip_port, size ,msg):
-    # if dst_ip_port != None:
-    print_str = '[%s][%s : %s > %s : %s] %s' % (proto,src_ip,src_ip_port,dst_ip, dst_ip_port, msg )
+##etype17,18::
+##$krb5pa$ etype $ user $ realm $ hash
 
-        # # Escape colors like whatweb has
-        # ansi_escape = re.compile(r'\x1b[^m]*m')
-        # print_str = ansi_escape.sub('', print_str)
+## etype 23::
+##$krb5pa$ 23 $ user $ realm $ salt $
+def assemble_final_Hash(eType, realm, cName, hash):
+    hash_start = '$krb5pa$'
+    if eType==18 or eType==17:
+        print(hash_start+str(eType)+"$"+cName+"$"+realm+"$"+hash)
+    elif eType==23:
+        print(hash_start+str(eType)+"$"+cName+"$"+realm+"$salt$"+hash)
 
-    # else:
-    #     print_str = '[%s] %s' % (src_ip_port.split(':')[0], msg)
-    print(print_str)
+
+# def printer(proto,srcIP,dstIP,src_ip_port, dst_ip_port, size ,msg):
+#     # if dst_ip_port != None:
+#     print_str = '[%s][%s : %s > %s : %s] %s' % (proto,src_ip,src_ip_port,dst_ip, dst_ip_port, msg )
 #
-# packets = rdpcap('krb-816.cap')
-# pkList=[0,2,18,22]
+#         # # Escape colors like whatweb has
+#         # ansi_escape = re.compile(r'\x1b[^m]*m')
+#         # print_str = ansi_escape.sub('', print_str)
+#
+#     # else:
+#     #     print_str = '[%s] %s' % (src_ip_port.split(':')[0], msg)
+#     print(print_str)
+#
 
 
-packets = rdpcap('asReQ.pcap')
-pkList=[15,117]
+packets = rdpcap('krb-816.cap')
+pkList=[0,2,18,22]
+
+
+# packets = rdpcap('asReQ.pcap')
+# pkList=[15,117]
 
 
 # packets = rdpcap('host-and-user-ID-pcap-06.pcap')
@@ -156,17 +171,22 @@ for mypkt in pkList:
 
 
 
+
+
 hashes = []
 for i in pkList:
     hpayload = packets[i][Raw].load.hex()
     # payload = packets[i][Raw].load
-    hpayload = hpayload[8:]     ##should start with 6a 82
+    if proto=="TCP":
+        hpayload = hpayload[8:]     ##should start with 6a 82
+    elif proto=="UDP":
+        pass
     # print(hpayload)           ## start with
     pData_Header=hpayload[44:]
     hash = pData_Header[44:pData_Header.index("3011a10402")]  ##untill the start of PAC header
     hashes.append(hash)
     # print(pData_Header)
-    print("cipher detected :  "+hash)
+    # print("cipher detected :  "+hash)
     pvno = hpayload[24:26]          ##05
     MsgType = hpayload[34:36]       ##0a
     EncType = hpayload[78:80]       ##17
@@ -183,6 +203,7 @@ for i in pkList:
     # print(" packet NO :"+str(i)+" message type : [\\x"+MsgType+"] - "+str(MsgType_d))
     # print(" packet NO :"+str(i)+" enc type : [\\x"+EncType+"] - "+str(EncType_d)+":"+encTypes[str(EncType_d)])
     # print(" packet NO :"+str(i)+" pdata type_2 : [\\x"+pdataType+"] - "+str(pdataType_d))
+
 
 ### find Cname and Realm
     checkptStr=""
@@ -210,7 +231,7 @@ for i in pkList:
     realm = bytes.fromhex(realmH).decode('utf-8')
     print("realm : "+realmH+"  :  "+realm)
 
-
+    assemble_final_Hash(EncType_d,realm,cName,hash)
 
 
 
@@ -227,6 +248,7 @@ for i in pkList:
 
 ### final hash
 ##$krb5pa$18$john$COVID.INC$<<cipher>>
+
 '''
 $krb5pa$ etype $ user $ realm $ hash
 '''
