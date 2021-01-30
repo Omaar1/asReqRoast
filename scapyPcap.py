@@ -39,12 +39,14 @@ import  binascii
 ### msg-type: krb-as-req (10)          --> load[17]x2 = [34,36] = 0a
 ### etype: eTYPE-ARCFOUR-HMAC-MD5 (23) --> load[39]x2 = [78,80] = 17
 ### padata-type: pA-ENC-TIMESTAMP (2)  --> load[28]x2 = [56,58] = 02
+
 '''
 padata-type: pA-ENC-TIMESTAMP (2)
     padata-value: 303da003020117a236043471319a93d60531fcb443f7e96039f540addbe67ccf9dd3c3da…
         etype: eTYPE-ARCFOUR-HMAC-MD5 (23)
         cipher: 71319a93d60531fcb443f7e96039f540addbe67ccf9dd3c3da9e233612816c5720447ae2…
 '''
+
 ### kerberos TCP before preAuth no hash exist
 ### TCP before Pre-auth
 ### start with  6a 81
@@ -64,6 +66,10 @@ padata-type: pA-ENC-TIMESTAMP (2)
 
 
 ###PA-DATA pA-PAC-REQUEST  30 11 a1 04 02 02 00 80 a2 09 04073005a0030101ff
+
+### 7500	Kerberos 5 AS-REQ Pre-Auth etype 23
+### 19800	Kerberos 5, etype 17, Pre-Auth
+### 19900	Kerberos 5, etype 18, Pre-Auth
 
 
 protocols =	{6:'tcp',
@@ -155,7 +161,7 @@ for i in pkList:
     hpayload = packets[i][Raw].load.hex()
     # payload = packets[i][Raw].load
     hpayload = hpayload[8:]     ##should start with 6a 82
-    #print(hpayload)             ## start with 30
+    # print(hpayload)           ## start with
     pData_Header=hpayload[44:]
     hash = pData_Header[44:pData_Header.index("3011a10402")]  ##untill the start of PAC header
     hashes.append(hash)
@@ -173,11 +179,36 @@ for i in pkList:
     pdataType_d = int(pdataType, 16)
     EncType_d = int(EncType, 16)
 
-    print(" packet NO :"+str(i)+" pvno  : [\\x"+pvno+"] - "+str(pvno_d))
-    print(" packet NO :"+str(i)+" message type : [\\x"+MsgType+"] - "+str(MsgType_d))
-    print(" packet NO :"+str(i)+" enc type : [\\x"+EncType+"] - "+encTypes[str(EncType_d)])
-    print(" packet NO :"+str(i)+" pdata type_2 : [\\x"+pdataType+"] - "+str(pdataType_d))
+    # print(" packet NO :"+str(i)+" pvno  : [\\x"+pvno+"] - "+str(pvno_d))
+    # print(" packet NO :"+str(i)+" message type : [\\x"+MsgType+"] - "+str(MsgType_d))
+    # print(" packet NO :"+str(i)+" enc type : [\\x"+EncType+"] - "+str(EncType_d)+":"+encTypes[str(EncType_d)])
+    # print(" packet NO :"+str(i)+" pdata type_2 : [\\x"+pdataType+"] - "+str(pdataType_d))
 
+### find Cname and Realm
+    checkptStr=""
+    if("a003020101" in hpayload):       ##name-type: kRB5-NT-PRINCIPAL (1)
+        checkptStr = "a003020101"
+    elif("a00302010a" in hpayload):     ##name-type: kRB5-NT-ENTERPRISE-PRINCIPAL (10)
+        checkptStr = "a00302010a"
+
+    cName_checkPoint= hpayload.index(checkptStr)+20           ## start from cName size
+    cName_size = hpayload[cName_checkPoint:cName_checkPoint+2]  ## extract cname size
+    cName_size_d = int(cName_size, 16)                          ## cname in decimal
+    cName_start = cName_checkPoint+2                           ##
+    cName_end= cName_start+(cName_size_d*2)
+    cNameH = hpayload[cName_start:cName_end]
+    cName = bytes.fromhex(cNameH).decode('utf-8')
+    print("cname : "+cNameH+"  :  "+cName)
+
+
+    realm_checkPoint = cName_end+6              ## start with realm size
+    realm_size = hpayload[realm_checkPoint:realm_checkPoint+2]
+    realm_size_d =int(realm_size, 16)
+    realm_start = realm_checkPoint+2                           ##
+    realm_end  = realm_start+(realm_size_d*2)
+    realmH = hpayload[realm_start:realm_end]
+    realm = bytes.fromhex(realmH).decode('utf-8')
+    print("realm : "+realmH+"  :  "+realm)
 
 
 
@@ -192,5 +223,21 @@ for i in pkList:
 #     c=c+2
 
 # print(payload)
+
+
+### final hash
+##$krb5pa$18$john$COVID.INC$<<cipher>>
+'''
+$krb5pa$ etype $ user $ realm $ hash
+'''
+
+
+'''
+cname
+    name-type: kRB5-NT-PRINCIPAL (1)
+    cname-string: 1 item
+        CNameString: JOHNSON-PC$
+starts with 30 xx
+'''
 
 
