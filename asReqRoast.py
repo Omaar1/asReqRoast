@@ -1,13 +1,11 @@
 import argparse
-# from os import geteuid, devnull
+from os import geteuid, devnull
 
 from scapy.all import *
 conf.verb=0  ## scapy no verbose
+import atexit
 
 
-#Console colors
-W = '\033[0m'  # white (normal)
-T = '\033[93m'  # tan
 encTypes={
         '1':"des-cbc-crc" ,
         '2':"des-cbc-md4" ,
@@ -31,40 +29,36 @@ encTypes={
         '65':   "subkey-keymaterial",
 }
 
-# DN = open(devnull, 'w')
 
 hashes=[]
+file = ''
+count = 1
 
 def parse_args():
    """Create the arguments"""
    parser = argparse.ArgumentParser()
    parser.add_argument("-i", "--interface", help="Choose an interface")
    parser.add_argument("-p", "--pcap", help="Parse info from a pcap file; -p <pcapfilename>")
-   parser.add_argument("-f", "--filterip", help="Do not sniff packets from this IP address; -f 192.168.0.4")
+   parser.add_argument("-o", "--out", help="specify a a file to store hashes")
+   # parser.add_argument("-v", "--verbose", help="show more information about packets")
    return parser.parse_args()
 
 
+def write_hashes():
+    print('ssss ',file)
+    if file != '':
+        f = open(file, "w")
+        for hash in hashes:
+            f.write(hash)
+            f.write('\r')
+        print("hashes are saved in "+ file)
+        f.close()
 
 
 
-def printer(src_ip_port, dst_ip_port, msg):
-    if dst_ip_port != None:
-        print_str = '[%s > %s] %s%s%s' % (src_ip_port, dst_ip_port, T, msg, W)
-        # All credentials will have dst_ip_port, URLs will not
 
-
-        # Escape colors like whatweb has
-        ansi_escape = re.compile(r'\x1b[^m]*m')
-        print_str = ansi_escape.sub('', print_str)
-
-        # Log the creds
-        logging.info(print_str)
-    else:
-        print_str = '[%s] %s' % (src_ip_port.split(':')[0], msg)
-        print(print_str)
 
 def get_asreq_encType(hpayload):
-        # pData_Header = hpayload[44:]
         pvno = hpayload[24:26]  ##05
         MsgType = hpayload[34:36]  ##0a
         EncType = hpayload[78:80]  ##17
@@ -145,29 +139,32 @@ def pkt_parser(pkt):
         return
 
 
-    hpayload =""
     # UDP
     if pkt.haslayer(UDP) and pkt.haslayer(IP) and pkt.haslayer(Raw): ## maybe later we specify ports
         if pkt[UDP].dport == 88:
             proto="UDP"
             src_ip_port = str(pkt[IP].src) + ':' + str(pkt[UDP].sport)
             dst_ip_port = str(pkt[IP].dst) + ':' + str(pkt[UDP].dport)
-            print("UDP from " , src_ip_port," to ",dst_ip_port)
             hpayload = pkt[Raw].load.hex()
             encType = get_asreq_encType(hpayload)
             if(encType):
+                print('packet No: ' + str(count) + "...")
+                print("UDP from ", src_ip_port, " to ", dst_ip_port)
                 extract_hash(hpayload,encType)
+
+
     ## TCP
     elif pkt.haslayer(TCP) and pkt.haslayer(IP) and pkt.haslayer(Raw): ## maybe later we specify ports to check faster
         proto="TCP"
         if pkt[TCP].dport ==88:
             src_ip_port = str(pkt[IP].src) + ':' + str(pkt[TCP].sport)
             dst_ip_port = str(pkt[IP].dst) + ':' + str(pkt[TCP].dport)
-            print("TCP from " , src_ip_port," to ",dst_ip_port)
             raw =pkt[Raw].load.hex()
             hpayload = raw[8:]
             encType = get_asreq_encType(hpayload)
             if(encType):
+                print('packet No: ' + str(count) + "...")
+                print("TCP from ", src_ip_port, " to ", dst_ip_port)
                 extract_hash(hpayload,encType)
     else:
         return
@@ -177,14 +174,13 @@ def pkt_parser(pkt):
 
 def main(args):
     if args.pcap:
-        c=1
         try:
             for pkt in PcapReader(args.pcap):
-                print('packet No: '+str(c)+"...")
                 pkt_parser(pkt)
-                c=c+1
+                global count
+                count = count+1
 
-            print('hashes found in file :')
+            print('\n\nhashes found :')
             for hash in hashes:
                 print(hash)
         except IOError:
@@ -200,8 +196,15 @@ def main(args):
     if args.interface:
         conf.iface = args.interface
         print('[*] Using interface:  ', conf.iface)
-        # sniff(iface=conf.iface, prn=lambda x: x.summary(), store=0)
         sniff(iface=conf.iface, prn=pkt_parser, store=0)
+
+    if args.out:
+        global file
+        file = args.out
+        atexit.register(write_hashes)
+
+
+
 
 if __name__ == "__main__":
    main(parse_args())
