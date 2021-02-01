@@ -19,3 +19,8 @@ __-i__ specify an interface for sniffing
 python3 asReqRoast.py -i <interface>
 ```
 
+__-i__ specify a file to store hashes
+
+```
+python3 asReqRoast.py -i <interface> -o out.txt
+```
